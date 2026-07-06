@@ -29,26 +29,51 @@ startup.
   to [Removing the Master-Slave Image Configuration](https://github.com/nacos-group/nacos-docker/wiki/%E7%A7%BB%E9%99%A4%E6%95%B0%E6%8D%AE%E5%BA%93%E4%B8%BB%E4%BB%8E%E9%95%9C%E5%83%8F%E9%85%8D%E7%BD%AE)
 * Since Nacos 1.3.1 version, the database storage has been upgraded to 8.0, and it is backward compatible
 * If you use a custom database, you need to initialize
-  the [database script](https://github.com/alibaba/nacos/blob/master/distribution/conf/mysql-schema.sql) yourself for
+  the [database script](https://github.com/alibaba/nacos/blob/develop/plugin-default-impl/nacos-default-datasource-plugin/nacos-datasource-plugin-mysql/src/main/resources/META-INF/mysql-schema.sql) yourself for
   the first time.
 
 ## Quick Start
 
+### Nacos v3.x
+
 ```shell
-docker run --name nacos-quick -e MODE=standalone -p 8848:8848 -p 9848:9848 -d nacos/nacos-server:v2.2.0
+docker run --name nacos-standalone-derby \
+    -e MODE=standalone \
+    -e NACOS_AUTH_TOKEN=${your_nacos_auth_secret_token} \
+    -e NACOS_AUTH_IDENTITY_KEY=${your_nacos_server_identity_key} \
+    -e NACOS_AUTH_IDENTITY_VALUE=${your_nacos_server_identity_value} \
+    -p 8080:8080 \
+    -p 8848:8848 \
+    -p 9848:9848 \
+    -d nacos/nacos-server:latest
+```
+
+### Nacos v2.x
+
+```shell
+docker run --name nacos-standalone-derby-v2.5.1 \
+    -e MODE=standalone \
+    -e NACOS_AUTH_ENABLE=true \
+    -e NACOS_AUTH_TOKEN=${your_nacos_auth_secret_token} \
+    -e NACOS_AUTH_IDENTITY_KEY=${your_nacos_server_identity_key} \
+    -e NACOS_AUTH_IDENTITY_VALUE=${your_nacos_server_identity_value} \
+    -p 8848:8848 \
+    -p 9848:9848 \
+    -d nacos/nacos-server:v2.5.1
 ```
 
 ## Advanced Usage
 
-* Tips: You can change [the version of the Nacos image](https://hub.docker.com/r/nacos/nacos-server/tags) in the compose file from the following configuration.
-  `example/.env`
+* Tips: You can change [the version of the Nacos image](https://hub.docker.com/r/nacos/nacos-server/tags) in the compose file from the following configuration. `example/.env`
 
 ```dotenv
-NACOS_VERSION=v2.3.1
+NACOS_VERSION=v3.2.2
 ```
-For Mac user with Arm Chip (like M1/M2/M3 series) , you need to add `-slim` after version which support `arm` arch. 
+
+For Mac user with Arm Chip (like M1/M2/M3 series) , you need to add `-slim` after version which support `arm` arch.
+
 ```dotenv
-NACOS_VERSION=v2.3.1-slim
+NACOS_VERSION=v3.2.2-slim
 ```
 
 Run the following command：
@@ -60,20 +85,24 @@ Run the following command：
   cd nacos-docker
   ```
 
-
 * Standalone Derby
 
   ```powershell
   docker-compose -f example/standalone-derby.yaml up
   ```
+
 * Standalone Mysql
 
   ```powershell
-  # Using mysql 5.7
-  docker-compose -f example/standalone-mysql-5.7.yaml up
+  cd example
+  ./mysql-init.sh && docker-compose -f standalone-mysql.yaml up
+  ```
 
-  # Using mysql 8
-  docker-compose -f example/standalone-mysql-8.yaml up
+* Standalone Independent Mysql（Only Nacos 3.x is supported）
+
+  ```powershell
+  cd example
+  ./mysql-init.sh && docker-compose -f standalone-independent-mysql.yaml up
   ```
 
 * Standalone Nacos Cluster
@@ -82,36 +111,34 @@ Run the following command：
   docker-compose -f example/cluster-hostname.yaml up 
   ```
 
-
 * Service registration
 
   ```powershell
-  curl -X POST 'http://127.0.0.1:8848/nacos/v1/ns/instance?serviceName=nacos.naming.serviceName&ip=20.18.7.10&port=8080'
-
+  curl -X POST 'http://127.0.0.1:8848/nacos/v3/client/ns/instance?serviceName=quickstart.test.service&ip=127.0.0.1&port=8080
   ```
 
 * Service discovery
 
     ```powershell
-    curl -X GET 'http://127.0.0.1:8848/nacos/v1/ns/instance/list?serviceName=nacos.naming.serviceName'
+    curl -X GET 'http://127.0.0.1:8848/nacos/v3/client/ns/instance/list?serviceName=quickstart.test.service'
     ```
 
 * Publish config
 
   ```powershell
-  curl -X POST "http://127.0.0.1:8848/nacos/v1/cs/configs?dataId=nacos.cfg.dataId&group=test&content=helloWorld"
+  curl -X POST 'http://127.0.0.1:8848/nacos/v3/auth/user/login' -d 'username=nacos' -d 'password=${your_password}'
+  curl -X POST 'http://127.0.0.1:8848/nacos/v3/admin/cs/config?dataId=quickstart.test.config&groupName=test&content=HelloWorld' -H "accessToken:${your_access_token}"
   ```
 
 * Get config
 
   ```powershell
-    curl -X GET "http://127.0.0.1:8848/nacos/v1/cs/configs?dataId=nacos.cfg.dataId&group=test"
+    curl -X GET 'http://127.0.0.1:8848/nacos/v3/client/cs/config?dataId=quickstart.test.config&groupName=test'
   ```
-
 
 * Open the Nacos console in your browser
 
-  link：http://127.0.0.1:8848/nacos/
+  link：http://127.0.0.1:8080/index.html
 
 ## Common property configuration
 
@@ -151,8 +178,15 @@ Run the following command：
 | NACOS_SECURITY_IGNORE_URLS              | nacos.security.ignore.urls                                                                                                        | default : `/,/error,/**/*.css,/**/*.js,/**/*.html,/**/*.map,/**/*.svg,/**/*.png,/**/*.ico,/console-fe/public/**,/v1/auth/**,/v1/console/health/**,/actuator/**,/v1/console/server/**` |
 | NACOS_CONSOLE_UI_ENABLED                | nacos.console.ui.enabled                                                                                                          | default : `true`                                                                                                                                                                      |
 | NACOS_CORE_PARAM_CHECK_ENABLED          | nacos.core.param.check.enabled                                                                                                    | default : `true`                                                                                                                                                                      |
-| DB_POOL_CONNECTION_TIMEOUT               | Database connection pool timeout in milliseconds                                                                                 | default : **30000**                                                                                                                                                                   |
-
+| DB_POOL_CONNECTION_TIMEOUT              | Database connection pool timeout in milliseconds                                                                                  | default : **30000**                                                                                                                                                                   |
+| NACOS_CONSOLE_UI_ENABLED                | nacos.console.ui.enabled                                                                                                          | default : `true`                                                                                                                                                                      |
+| NACOS_CORE_PARAM_CHECK_ENABLED          | nacos.core.param.check.enabled                                                                                                    | default : `true`                                                                                                                                                                      |
+| NACOS_AUTH_ADMIN_ENABLE                 | nacos.core.auth.admin.enable                                                                                                      | default : `true`                                                                                                                                                                      |
+| NACOS_AUTH_CONSOLE_ENABLE               | nacos.core.auth.console.enable                                                                                                    | default : `true`                                                                                                                                                                      |                                                                                                                                                                                       |
+| NACOS_CONSOLE_PORT                      | nacos.console.port                                                                                                                | default : `8080`                                                                                                                                                                      |
+| NACOS_CONSOLE_CONTEXTPATH               | nacos.console.contextPath                                                                                                         | default : ``                                                                                                                                                                          |
+| NACOS_DEPLOYMENT_TYPE                   | nacos.deployment.type                                                                                                             | default : `merged` support config `server` `console`                                                                                                                                  |
+| NACOS_EXT_PLUGIN_DIRS                   | Additional mounted plugin or dependency directories appended to `loader.path`                                                    | comma-separated directories, for example `/home/nacos/ext-plugins,/home/nacos/ext-libs`                                                                                              |
 
 ## Advanced configuration
 
@@ -169,10 +203,37 @@ For example:
 docker-compose -f example/custom-application-config.yaml up -d
 ```
 
+If you need to load extra plugin jars or dependency jars without rebuilding the image, mount those
+directories into the container and append them through `NACOS_EXT_PLUGIN_DIRS`.
+
+For example:
+
+```docker
+docker-compose -f example/custom-plugin-dir.yaml up -d
+```
+
+```docker
+docker run --name nacos-standalone \
+  -e MODE=standalone \
+  -e NACOS_AUTH_TOKEN=${your_nacos_auth_secret_token} \
+  -e NACOS_AUTH_IDENTITY_KEY=${your_nacos_server_identity_key} \
+  -e NACOS_AUTH_IDENTITY_VALUE=${your_nacos_server_identity_value} \
+  -e NACOS_EXT_PLUGIN_DIRS=/home/nacos/ext-plugins,/home/nacos/ext-libs \
+  -v /path/to/plugins:/home/nacos/ext-plugins \
+  -v /path/to/libs:/home/nacos/ext-libs \
+  -p 8080:8080 \
+  -p 8848:8848 \
+  -p 9848:9848 \
+  -d nacos/nacos-server:latest
+```
+
+This is useful when a plugin jar and its runtime dependency jars need to be mounted separately. For
+example, an LDAP deployment can mount the LDAP auth plugin jar in one directory and the required
+`spring-ldap-core` dependency jars in another.
+
 ## Nacos + Grafana + Prometheus
 
 Usage reference：[Nacos monitor-guide](https://nacos.io/zh-cn/docs/monitor-guide.html)
 
 **Note**:  When Grafana creates a new data source, the data source address must be **http://prometheus:9090**
-
 
